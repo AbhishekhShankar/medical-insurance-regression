@@ -1,0 +1,381 @@
+---
+title: "Regression Analysis of Medical Insurance Costs"
+subtitle: "MATH1312 Regression Analysis"
+author: "Abhishekh Shankar s3652116"
+output:
+  pdf_document: default
+bibliography: references.bib
+includes:
+      after_body: appendix.md
+header-includes:
+ \usepackage{float}
+---
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H')
+library(ggplot2)
+```
+
+
+# 1 Introduction
+Medical insurance and the costs associated with it is an important aspect every day life, and as such, it is essential that companies price it accurately to the individual. The objective of this project is to apply a number of regression models, and evaluate the best model to fit to the data set. The modelling takes into account a number of variables such as an individual's age and body mass index (bmi) and outputs a figure which is optimised to be the insurance costs to the individual. The data set is sourced from the online community Kaggle [^1], which takes reference from Lantz's book "Machine Learning With R" [@lantz2013machine].
+
+[^1]: https://www.kaggle.com/mirichoi0218/insurance
+
+
+# 2 Data Exploration
+
+## 2.1 Data Set
+The data set contains 1338 instances with 6 regressor variables and 1 response variable as summarised below.
+
+- `age`: Age of an individual, continuous.
+- `sex`: Sex of an individual, categorical -- male, female.
+- `BMI`: Body Mass Index of an individual, continuous.
+- `children`: Number of children an individual has, continuous.
+- `smoking status`: Smoking status of an individual, categorical -- yes, no.
+- `region`: Region where an individual lives, categorical -- southwest, southeast, northwest, northeast.
+- `charges`: \textbf{Response variable}, individual medical insurance costs, continuous.
+
+## 2.2 Descriptive Statistics
+It is assumed that certain variables in the data set contribute to a larger effect than others when determining the insurance charges. According to [@insuranceDOC], "the oldest adult who uses tobacco may be charged up to 4.5 times more than the youngest adult who does not", so it is assumed that the smoking status and age of individuals contribute significantly on the insurance charges. We explore this through the scatter plot below.
+
+
+```{r, out.width='50%', fig.align='center', fig.cap='Scatter plot of charges against age by smoking status'}
+insurance <- read.csv("insurance.csv")
+ggplot(insurance, aes(x=charges, y=age, color=smoker)) + geom_point() + 
+  labs(title = 'Plot of Charges Against Age By Smoking Status')
+```
+
+It can be observed that the insurance costs tend to be much larger for individuals who smoke, even for those that are younger. Furthermore, the cluster of non-smokers shown in the left-most portion of the plot shows that as age increases, the costs to the individual tend to increase also. This suggests that both the smoking status and age of the individual are useful predictors to their insurance costs, as hypothesised.
+
+
+It is also hypothesised that the `region` variable in the data does not play a large role in determining an individual's medical insurance charges and it can be seen from the scatter plot below that there does not seem to be a correlation as the charges are seemingly distributed equally amongst the different regions.
+
+
+```{r, out.width='50%', fig.align='center', fig.cap='Scatter plot of charges by region'}
+ggplot(insurance, aes(x=charges, y=region)) + geom_point() + 
+  labs(title = 'Plot of Charges By Region')
+```
+
+# 3 Modelling
+
+First, we define the following variables:
+
+\begin{centering}
+age = $x_1$\\
+sex = $x_2$\\
+bmi = $x_3$\\
+children = $x_4$\\
+smoker = $x_5$\\
+region = $x_6$\\
+\end{centering}
+
+## 3.1 Backward Elimination
+
+The first model to be fit to the data is computed through backward elimination, where a regression model utilising every predictor variable is initially fit, and variable significance through an F-test is completed in order to determine which variable to eliminate from the model. Appendix One shows the entirety of the R code and outputs for the backward elimination process.
+
+We define a critical value $F_{stay} = F_{0.05,1, n-p} = F_{0.05,1, 1331} = 3.85$ which represents the value with which a variable is to be removed from the model. The results of the first iteration shown in Appendix One indicate that the `age`, `bmi`, `children`, and `smoker` variables are all highly significant to a 5% level of signifiance. The `sex`, and `region` variables are shown to not be significant since $p > 0.05$ for both of those variables. Since `sex` is shown to have the largest p-value with $p = 0.6933$, and an F value less than $F_{stay}$, it is removed from the model.
+
+The following iteration shows `age`, `bmi`, `children`, and `smoker` are all still highly significant at the 5% level of significance, and since `region` is insignificant and has the highest p-value with $p=0.096$. Alongside this, with an F-value of $2.1166 < F_{stay} = 3.85$, we remove this variable from the final model. After these iterations, the remaining variables are all significant and the backward elimination model building process is completed. The final model summary is shown below.
+
+```{r}
+back.model <- lm(charges ~ age + bmi + children + factor(smoker), insurance)
+summary(back.model)
+```
+
+From this, the final model is as follows: $\hat{y} = -12102.77 + 257.85x_1 + 321.85x_3 + 473.50x_4 + 23811.40x_5$
+
+## 3.2 Forward Selection
+
+The second method of regression model building is completed via forward selection. A null model is initially defined and the significance of all the variables available to be added is tested. Appendix Two showcases the entire code outputs for the forward selection method and it can be seen in the first iteration that the most significant variable is the `smoker` varable and with the highest F-value that exceeds $F_{in} = 3.85$, it is added to the model.
+
+The next iteration shows that the `age` variable is the most significant variable and is added to the model. Further iterations show that `bmi` and `children` are the last two variables which show significance and an F-value that is greater than $F_{in}$ and so are added to the final model. Iterations beyond this show no more of the remaining variables whose F-values exceed the threshold to be able to be placed in the model. The final summary is shown below:
+
+```{r}
+forward.model <- lm(charges ~ age + bmi + children + factor(smoker), insurance)
+summary(forward.model)
+```
+
+The final model is: $\hat{y} = -12102.77 + 257.85x_1 + 321.85x_3 + 473.50x_4 + 23811.40x_5$
+
+The model found through backward elimination is equal to the model computed through forward selection.
+
+## 3.3 Best Subsets Regression
+
+The final type of regression model building is completed through best subsets regression which is using the adjusted $R^2$ value as a performance indicator. With a number of categorical variables present in the data, using the best subsets regression as a model builder presents the possiblilty of certain levels of a categorical variable being significant with the remaining being insignificant. As a result, for this analysis, should the majority of levels in a categorical variable be significant, that variable is considered for the model. 
+
+```{r, out.width="75%", fig.align='center', fig.cap='All subsets regression results with adjusted R-squared.'}
+r <- leaps::regsubsets(charges ~ age + sex + bmi + children + factor(smoker) + factor(region), 
+                       data = insurance)
+plot(r, scale='adjr2')
+```
+
+Shown above are six different models which share an adjusted $R^2$ of 0.75 and thus, the best subsets regression is computed again with $C_p$ as a performance indicator in an attempt to find one discernable model. The plot shown below shows that with a $C_p$ value of 5.7, a model without the `sex` variable is ideal. The categorical `region` variable is shown to be significant in two of its three defined levels and as such, is chosen to be significant in the model.
+
+```{r, out.width="75%", fig.align='center', fig.cap='All subsets regression results with Cp'}
+r <- leaps::regsubsets(charges ~ age + sex + bmi + children + factor(smoker) + factor(region), 
+                       data = insurance)
+plot(r, scale='Cp')
+```
+
+From this, the model summary is shown below.
+
+```{r}
+best.sub.model <- lm(charges ~ age + bmi + children + factor(smoker) + factor(region), insurance)
+summary(best.sub.model)
+```
+
+The final model is: 
+\[ \hat{y} =
+  \begin{cases}
+    -11990.27 + 256.97x_1 + 338.66x_2 + 474.57x_3 + 23836.30x_4 - 352.18x_5,  & \quad \text{if region = Northwest}\\
+    -11990.27 + 256.97x_1 + 338.66x_2 + 474.57x_3 + 23836.30x_4 - 1034.36x_5, & \quad \text{if region = Southeast}\\
+    -11990.27 + 256.97x_1 + 338.66x_2 + 474.57x_3 + 23836.30x_4 - 959.37x_5, & \quad \text{if region = Southwest}
+  \end{cases}
+\]
+
+# 4 Model Evaluation
+
+Considering both the backwards elimination and forwards selection model building resulted in the same model, all of their model evaluation results will be grouped together.
+
+## 4.1 Backward Elimination/Forward Selection Evaluation
+
+First, an analysis into the residuals is conducted. The plot in the top left shows the residuals amongst the fitted values and it can be observed that there are large numbers of residuals positioned on either side of the zero mean mark. From the plot, there does not appear to be a non-linear relationship amongst the residuals.
+
+
+```{r}
+par(mfrow = c(2,2))
+plot(back.model, which = c(1,2,3,4))
+```
+
+The QQ-plot in the top right shows a skewed, heavy tailed distribution and there are a large number of points that do not fall onto the line of normality. As a result, it does not appear that the data is normally distributed.
+
+The plot on the bottom left shows the Spread-Location plot and it can be observed that the red line is not horizontal, indicating that the data may not have an equal variance. 
+
+Finally, the bottom right plot shows that there are no instances of residuals that lie outside of Cook's Distances and as such, there does not seem to be evidence that outliers in the data are influential to the regression results.
+
+The Durbin-Watson test below shows that with a p-value of $p > 0.05$, there is insufficient evidence to reject the null hypothesis, therefore, this implies that the uncorrelated error assumption has not been violated.
+
+```{r}
+car::durbinWatsonTest(back.model)
+```
+
+The Shapiro-Wilk test shows a highly signifiant p-value to a 5% level of significance, therefore, there is sufficient evidence to reject the null hypothesis that the normality error assumption has not been violated. 
+
+```{r}
+stdres <- rstudent(back.model)
+shapiro.test(stdres)
+```
+
+The non-constant variance test below was seen to be highly significant to a 5% level of significance, indicating that there is sufficient evidence to reject the null hypothesis that the residuals' constant error assumption has not been violated.
+
+```{r}
+car::ncvTest(back.model)
+```
+
+Variance Inflation Factor (VIF) values are used to assess multicolinearity and as shown below, all of the variables used in the model show VIF values very close to 1.00, indicating that there does not appear to be any significant multicollinearity amongst the variables.
+
+```{r}
+car::vif(back.model)
+```
+
+
+## 4.2 Best Subsets Regression Evaluation
+
+The residuals amongst the fitted values in the top left shows that there are large numbers of residuals positioned on either side of the zero mean mark, indicating that there does not appear to be a non-linear relationship amongst the residuals.
+
+The QQ-plot in the top right shows a skewed, heavy tailed distribution similar to that of the QQ plot computed through the backwards elimination and forward selection. Since there are a large number of points that do not fall onto the line of normality, it appears the data is not normally distributed.
+
+The plot on the bottom left shows the Spread-Location plot and similar to the results shown above with the backward elimination and forward selection methods it can be observed that the red line is not horizontal, indicating that the data may not have an equal variance. 
+
+Finally, the bottom right plot shows that there are no instances of residuals that lie outside of Cook's Distances and as such, there does not seem to be evidence that outliers in the data are influential to the regression results.
+
+```{r}
+par(mfrow = c(2,2))
+plot(best.sub.model, which = c(1,2,3,4))
+```
+
+The Durbin-Watson test below shows that with a p-value of $p > 0.05$, there is insufficient evidence to reject the null hypothesis, therefore, this implies that the uncorrelated error assumption has not been violated.
+
+```{r}
+car::durbinWatsonTest(best.sub.model)
+```
+
+The Shapiro-Wilk test results were seen to be highly signifiant to a 5% level of significance, therefore, there is sufficient evidence to reject the null hypothesis that the normality error assumption has not been violated. 
+
+```{r}
+stdres <- rstudent(best.sub.model)
+shapiro.test(stdres)
+```
+
+The non-constant variance test below was seen to be highly significant to a 5% level of significance. This indicates that there is sufficient evidence to reject the null hypothesis that the residuals' constant error assumption has not been violated.
+
+```{r}
+car::ncvTest(best.sub.model)
+```
+
+The VIF values of all of the variables used in the model show values very close to 1.00, indicating that there does not appear to be any significant multicollinearity amongst the variables.
+
+```{r}
+car::vif(best.sub.model)
+```
+
+## 4.3 ANOVA Comparisons
+
+The ANOVA comparison of the two potential models is shown below. The p-value is seen to be insignificant to a 5% level of significance, indicating that the addition of the `region` variable does not lead to a significantly improved fit.
+
+```{r}
+anova(back.model, best.sub.model)
+```
+
+
+# 5 Discussion
+
+Three different regression model building techniques were implemented: backwards elimination, forward selection, and two separate best subsets regression models using both an adjusted $R^2$ and a $C_p$ value as performance indicators of each model in an attempt to develop an optimal regression model to the data. Results of the backwards elimination and forwards selection methods resulted in the same final model. 
+
+An initial look into the accuracy of these models showed that each model had very similar adjusted $R^2$ values, with 0.7489 and 0.7496 for the backwards elimination and best subsets regression model respectively, indicating that both of these models account for approximately 75% of the variation in the data. Considering 
+
+A linear regression model has the following assumptions:
+
+\begin{itemize}
+\item A linear relationship between the response variable and the regressors.
+\item The error term has 0 mean.
+\item The error term has a constant variance, $\sigma^2$.
+\item The errors are uncorrelated.
+\item The errors are normally distributed.
+\end{itemize}
+
+These assumptions were tested through a residual analysis which was conducted on the potential models. A look into linearity showed that the residuals for both models are seemingly uncorrelated, indicating a linear relationship. The errors were shown to be uncorrelated through the inability to reject the null hypothesis of the Durbin-Watson test. The QQ-plots of both models was shown to be non-normal since a large number of data points were skewed from the line of normality. This was supported by the results of the Shapiro-Wilk test which was found to be highly significant, indicating that the normality assumption had been violated. The non-constant variance error tests were conducted and in the cases of both models was highly significant, thereby rejecting the null hypothesis that the residuals' constant error variable has not been violated. Finally, the non-constant variance test showed that this assumption had been violated for both models. 
+
+Alongside a residual analysis, a look into any potential multicollinearity in the two model was investigated. VIF values for both models were very close 1.00, indicating that there does not appear to be any significant multicollinearity effects in the model amongst the variables.
+
+A final comparison of the two potential models was conducted through an ANOVA test, where the addition of the `region` variable was seen to be insignificant to improving the fit of the model. With this result alongside the residual analysis and the computation of the adjusted $R^2$ values, it is recommended that the `region` varible be excluded from the final model. As such, the final model is as follows: $\hat{y} = -12102.77 + 257.85x_1 + 321.85x_3 + 473.50x_4 + 23811.40x_5$. 
+
+
+# 6 Conclusion
+
+An initial look into the research surrounding medical insurance costs suggested that certain variables contribute to higher costs for the individual, such as their smoking status or age, and a preliminary investigation into the data supported these statements. 
+
+Fitting an optimal regression model to the data was completed through the utilisation of three different model building techniques: backward elimination, forward selection, and best subsets regression. Result showed that the backwards elimination and forward selection algorithms converged to the same ideal model, utilising `age`, `bmi`, `children`, and `smoker` as independent variables, while the best subsets regression model included all these alongside the `region` variable. 
+
+Residual analysis and a look into multicollinearity on the potential models showed very similar results and no obvious optimal model. As such, an ANOVA test was conducted to determine whether the inclusion of the `region` variable was significant. Test results indicated that the addition of the `region` variable was insignificant to the fit of the model and as such, the optimal model was deemed to be the result of the backwards elimination. 
+
+\newpage
+
+# Appendix One - Backward Elimination R Code
+
+```{r}
+full.model <- lm(charges ~ age + factor(sex) + bmi + children + factor(smoker) + 
+                   factor(region), insurance)
+drop1(full.model, test = "F")
+drop1(update(full.model, ~ . -factor(sex)), test = "F")
+drop1(update(full.model, ~ . -factor(sex) - factor(region)), test = "F")
+```
+
+\newpage
+
+# Appendix Two - Forward Selection R Code
+
+```{r}
+model.null <- lm(charges ~ 1, data = insurance)
+add1(model.null, scope = ~ age + factor(sex) + bmi + children + factor(smoker) + 
+                   factor(region), test = "F")
+
+add1(update(model.null, ~ . +factor(smoker)), scope = ~ age + factor(sex) + bmi + children + 
+       factor(smoker) + factor(region), test = "F")
+add1(update(model.null, ~ . +factor(smoker) + age), scope = ~ age + factor(sex) + bmi + 
+       children + factor(smoker) + factor(region), test = "F")
+add1(update(model.null, ~ . +factor(smoker) + age + bmi), scope = ~ age + factor(sex) + bmi + 
+       children + factor(smoker) + factor(region), test = "F")
+add1(update(model.null, ~ . +factor(smoker) + age + bmi + children), scope = ~ age + factor(sex) + 
+       bmi + children + factor(smoker) + factor(region), test = "F")
+```
+
+\newpage
+
+# Appendix Three - R Code Session
+
+```{r, eval=FALSE}
+# Import necessary libraries.
+library(ggplot2)
+
+# Read in the data.
+insurance <- read.csv("insurance.csv")
+
+# Plot the charges by age and smoking status.
+ggplot(insurance, aes(x=charges, y=age, color=smoker)) + geom_point() + 
+  labs(title = 'Plot of Charges Against Age By Smoking Status')
+
+# Plot the charges against the region.
+ggplot(insurance, aes(x=charges, y=region)) + geom_point() + 
+  labs(title = 'Plot of Charges By Region')
+
+# Fit the backwards elimination model.
+full.model <- lm(charges ~ age + factor(sex) + bmi + children + factor(smoker) + 
+                   factor(region), insurance)
+drop1(full.model, test = "F")
+drop1(update(full.model, ~ . -factor(sex)), test = "F")
+drop1(update(full.model, ~ . -factor(sex) - factor(region)), test = "F")
+
+back.model <- lm(charges ~ age + bmi + children + factor(smoker), insurance)
+summary(back.model)
+
+# Fit the forwards selection model.
+model.null <- lm(charges ~ 1, data = insurance)
+add1(model.null, scope = ~ age + factor(sex) + bmi + children + factor(smoker) + 
+                   factor(region), test = "F")
+
+add1(update(model.null, ~ . +factor(smoker)), scope = ~ age + factor(sex) + bmi + children + 
+       factor(smoker) + factor(region), test = "F")
+add1(update(model.null, ~ . +factor(smoker) + age), scope = ~ age + factor(sex) + bmi + 
+       children + factor(smoker) + factor(region), test = "F")
+add1(update(model.null, ~ . +factor(smoker) + age + bmi), scope = ~ age + factor(sex) + bmi + 
+       children + factor(smoker) + factor(region), test = "F")
+add1(update(model.null, ~ . +factor(smoker) + age + bmi + children), scope = ~ age + factor(sex) + 
+       bmi + children + factor(smoker) + factor(region), test = "F")
+
+forward.model <- lm(charges ~ age + bmi + children + factor(smoker), insurance)
+summary(forward.model)
+
+# Fit a best subsets regression model.
+# adjusted R^2
+r <- leaps::regsubsets(charges ~ age + sex + bmi + children + factor(smoker) + factor(region), 
+                       data = insurance)
+plot(r, scale='adjr2')
+
+# Cp
+r <- leaps::regsubsets(charges ~ age + sex + bmi + children + factor(smoker) + factor(region), 
+                       data = insurance)
+plot(r, scale='Cp')
+
+# Model Diagnostics
+par(mfrow = c(2,2))
+plot(back.model, which = c(1,2,3,4))
+
+# Durbin-Watson Test.
+car::durbinWatsonTest(back.model)
+
+# Shapiro-Wilk Test.
+stdres <- rstudent(best.sub.model)
+shapiro.test(stdres)
+
+# Non-constant variance test.
+car::ncvTest(best.sub.model)
+
+#VIF Values.
+car::vif(best.sub.model)
+
+# ANOVA comparisons.
+anova(back.model, best.sub.model)
+```
+
+
+\newpage
+
+# References
